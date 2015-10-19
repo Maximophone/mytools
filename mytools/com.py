@@ -38,7 +38,27 @@ class Chat(threading.Thread):
 		self.name = name
 		self.cipher = cipher
 		self.sock = socket(AF_INET,SOCK_STREAM)
+		self.received = []
+		self.sent = []
 
+	def iter_received(self):
+		served = 0
+		while True:
+			while len(self.received) == served: time.sleep(1)
+			yield self.received[served]
+			served += 1
+
+
+	def sendall(self,text):
+		self.sent.append((text,self._sendall(self.cipher.encrypt(self.name+': '+text))))
+
+	def receive(self,text):
+		decrypted = self.cipher.decrypt(text)
+		self.received.append(decrypted)
+		self._receive(decrypted)
+
+	def _receive(self,text):
+		print text
 
 
 class ChatServer(Chat):
@@ -48,8 +68,18 @@ class ChatServer(Chat):
 		self.addr = None
 		
 
-	def sendall(self,text):
-		self.conn.sendall(self.cipher.encrypt(self.name+': '+text))
+	def _sendall(self,text):
+		try:
+			if self.conn:
+				self.conn.sendall(text)
+				return True
+			else:
+				print 'No connection available'
+				return False
+		except Exception as e:
+			print "Encoutered exception when sending message. Exception:"
+			print e
+			return False
 
 	def run(self):
 		# s = socket(AF_INET,SOCK_STREAM)
@@ -62,7 +92,7 @@ class ChatServer(Chat):
 			for input_item in inputready:
 				data = self.conn.recv(1024)
 				if data:
-					print self.cipher.decrypt(data)
+					self.receive(data)
 				else:
 					break
 			time.sleep(0)
@@ -75,8 +105,14 @@ class ChatClient(Chat):
 		super(ChatClient,self).__init__(name,cipher)
 		self.host = None
 
-	def sendall(self,text):
-		self.sock.sendall(self.cipher.encrypt(self.name+': '+text))
+	def _sendall(self,text):
+		try:
+			self.sock.sendall(text)
+			return True
+		except Exception as e:
+			print "Encoutered exception when sending message. Exception:"
+			print e
+			return False
 
 	def run(self):
 		# self.sock = socket(AF_INET,SOCK_STREAM)
@@ -87,7 +123,7 @@ class ChatClient(Chat):
 			for input_item in inputready:
 				data = self.sock.recv(1024)
 				if data:
-					print self.cipher.decrypt(data)
+					self.receive(data)
 				else:
 					break
 			time.sleep(0)
